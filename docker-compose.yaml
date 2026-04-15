@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: clinic-postgres
+    environment:
+      POSTGRES_USER: clinic
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: clinic_core
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clinic -d clinic_core"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clinic-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: clinic-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: clinic_appointments
+      MYSQL_USER: clinic
+      MYSQL_PASSWORD: root
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysqldata:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uclinic", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clinic-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: clinic-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clinic-net
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: clinic-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: dev
+      RABBITMQ_DEFAULT_PASS: dev
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    networks:
+      - clinic-net
+
+volumes:
+  pgdata:
+  mysqldata:
+
+networks:
+  clinic-net:
+    driver: bridge
