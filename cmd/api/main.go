@@ -71,9 +71,6 @@ func main() {
 	// MySQL → Appointment Module
 	// Menggunakan db.NewMySQLDB (sudah termasuk pool config & ping)
 	mysqlURL := cfg.MysqlURL
-	if mysqlURL == "" || strings.Contains(mysqlURL, "${") {
-		mysqlURL = config.BuildMysqlURL()
-	}
 	apptDB, err := db.NewMySQLDB(db.MySQLDsn(mysqlURL))
 	if err != nil {
 		logger.Fatal("mysql init failed", zap.Error(err))

@@ -23,7 +23,7 @@ func Load() *Config {
 		PostgresURL: getEnv("PG_URL", ""),
 		RedisPort:   getEnv("REDIS_PORT", ""),
 		RabbitMQURL: getEnv("RABBITMQ_URL", ""),
-		MysqlURL:    getEnv("MYSQL_URL", ""),
+		MysqlURL:    getEnv("MYSQL_URL_APP", ""),
 	}
 }
 
