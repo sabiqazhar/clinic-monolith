@@ -11,6 +11,9 @@ import (
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/broker"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/cache"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/db"
+	handler2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/handler"
+	repository2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/repository"
+	service2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/service"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/handler"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/repository"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/service"
@@ -46,8 +49,12 @@ func InitializeApp(pgDsn db.PGDsn, redisAddr cache.RedisAddr, rabbitURL broker.R
 	mainPublisherAdapter := newPublisherAdapter(rabbitMQ)
 	patientService := service.NewPatientService(patientRepository, mainCacheAdapter, mainPublisherAdapter, logger)
 	patientHandler := handler.NewPatientHandler(patientService, logger)
+	invoiceRepository := repository2.NewBillingRepo(pool, logger)
+	billingService := service2.NewBillingService(invoiceRepository, patientService, mainCacheAdapter, mainPublisherAdapter, logger)
+	billingHandler := handler2.NewBillingHandler(billingService, logger)
 	app := &App{
 		PatientHandler: patientHandler,
+		BillingHandler: billingHandler,
 	}
 	return app, nil
 }
@@ -74,6 +81,7 @@ func (p *publisherAdapter) PublishEventAsync(ctx context.Context, topic string, 
 // Wire akan mengisi field-field ini secara otomatis.
 type App struct {
 	PatientHandler *handler.PatientHandler
+	BillingHandler *handler2.BillingHandler
 }
 
 // Provider functions for adapters

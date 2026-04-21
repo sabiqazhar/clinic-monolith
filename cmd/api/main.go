@@ -27,7 +27,7 @@ import (
 )
 
 // =============================================================================
-// ENTRY POINT: Aplikasi dimulai dari sini
+// ENTRY POINT
 // =============================================================================
 // Blueprint Compliance:
 // "Entry point bertanggung jawab atas: load config, init infrastruktur,
@@ -127,7 +127,7 @@ func main() {
 	// Blueprint: "Handler tahu route-nya sendiri, main.go cuma mount."
 	app.PatientHandler.RegisterRoutes(v1.Group("/patients"))
 	// app.AppointmentHandler.RegisterRoutes(v1.Group("/appointments"))
-	// app.BillingHandler.RegisterRoutes(v1.Group("/billing"))
+	app.BillingHandler.RegisterRoutes(v1.Group("/billing"))
 
 	// Health check endpoint (bisa untuk Kubernetes liveness probe)
 	r.GET("/healthz", func(c *gin.Context) {

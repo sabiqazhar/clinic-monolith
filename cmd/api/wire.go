@@ -13,9 +13,12 @@ import (
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/broker"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/cache"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/db"
+	"github.com/sabiqazhar/clinic-monolith/internal/modules/billing"
+	billingdomain "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/domain"
+	billinghandler "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/handler"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient"
-	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/domain"
-	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/handler"
+	patientdomain "github.com/sabiqazhar/clinic-monolith/internal/modules/patient/domain"
+	patienthandler "github.com/sabiqazhar/clinic-monolith/internal/modules/patient/handler"
 )
 
 // Adapters: wrap concrete types to domain interfaces
@@ -39,7 +42,8 @@ func (p *publisherAdapter) PublishEventAsync(ctx context.Context, topic string, 
 // App adalah struct yang menampung semua handler yang sudah dirakit.
 // Wire akan mengisi field-field ini secara otomatis.
 type App struct {
-	PatientHandler *handler.PatientHandler
+	PatientHandler *patienthandler.PatientHandler
+	BillingHandler *billinghandler.BillingHandler
 }
 
 // InitializeApp is the INJECTOR FUNCTION.
@@ -63,11 +67,16 @@ func InitializeApp(
 		newPublisherAdapter,
 
 		// Interface adapters - bind domain interfaces to concrete types
-		wire.Bind(new(domain.CacheManager), new(*cacheAdapter)),
-		wire.Bind(new(domain.EventPublisher), new(*publisherAdapter)),
+		// Patient domain interfaces (both are identical, binding one set is sufficient)
+		wire.Bind(new(patientdomain.CacheManager), new(*cacheAdapter)),
+		wire.Bind(new(patientdomain.EventPublisher), new(*publisherAdapter)),
+		// Billing domain interfaces
+		wire.Bind(new(billingdomain.CacheManager), new(*cacheAdapter)),
+		wire.Bind(new(billingdomain.EventPublisher), new(*publisherAdapter)),
 
 		// Patient module provider set
 		patient.PatientSet,
+		billing.BillingSet,
 
 		// App struct
 		wire.Struct(new(App), "*"),

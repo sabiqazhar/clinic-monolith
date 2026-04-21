@@ -62,5 +62,5 @@ create-module:
 	echo "package service" > internal/modules/$(name)/service/$(name).go && \
 	echo "package $(name)" > internal/modules/$(name)/provider.go && \
 	echo "" && \
-	echo "✅ Module '$(name)' created:" && \
+	echo "Module '$(name)' created:" && \
 	find internal/modules/$(name) -type f
