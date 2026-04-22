@@ -116,10 +116,19 @@ func main() {
 	// MySQL Outbox Relay (Appointment module)
 	go broker.NewOutboxRelay(apptDB, rabbitMQ, logger).Start(ctx)
 
-	// Consumer/Subscriber bisa di-start di sini jika sudah diimplementasi:
-	// if app.NotificationConsumer != nil {
-	// 	go app.NotificationConsumer.Start(ctx)
-	// }
+	// Consumer/Subscriber - start event subscribers
+	if app.PatientSubscriber != nil {
+		logger.Info("starting patient subscriber", zap.String("topic", app.PatientSubscriber.Topic()))
+		go func() {
+			// Wrap to match RabbitMQ handler signature (topic string)
+			handler := func(ctx context.Context, topic string, payload []byte) error {
+				return app.PatientSubscriber.HandleEvent(ctx, payload)
+			}
+			if err := rabbitMQ.Subscribe([]string{app.PatientSubscriber.Topic()}, handler); err != nil {
+				logger.Error("patient subscriber failed", zap.Error(err))
+			}
+		}()
+	}
 
 	// ── 7️⃣ HTTP Server (Gin Framework) ──
 	gin.SetMode(gin.ReleaseMode) // Disable debug logs di production

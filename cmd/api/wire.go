@@ -19,6 +19,7 @@ import (
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/billing"
 	billingdomain "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/domain"
 	billinghandler "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/handler"
+	billingsubscriber "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/subscriber"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient"
 	patientdomain "github.com/sabiqazhar/clinic-monolith/internal/modules/patient/domain"
 	patienthandler "github.com/sabiqazhar/clinic-monolith/internal/modules/patient/handler"
@@ -48,6 +49,7 @@ type App struct {
 	PatientHandler     *patienthandler.PatientHandler
 	BillingHandler     *billinghandler.BillingHandler
 	AppointmentHandler *appointmenthandler.AppointmentHandler
+	PatientSubscriber  *billingsubscriber.PatientSubscriber
 }
 
 // InitializeApp is the INJECTOR FUNCTION.
@@ -85,6 +87,9 @@ func InitializeApp(
 		patient.PatientSet,
 		billing.BillingSet,
 		appointment.AppointmentSet,
+
+		// Subscribers
+		billingsubscriber.NewPatientSubscriber,
 
 		// App struct
 		wire.Struct(new(App), "*"),

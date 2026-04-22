@@ -17,6 +17,7 @@ import (
 	handler2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/handler"
 	repository2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/repository"
 	service2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/service"
+	"github.com/sabiqazhar/clinic-monolith/internal/modules/billing/subscriber"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/handler"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/repository"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/patient/service"
@@ -62,10 +63,12 @@ func InitializeApp(pgDsn db.PGDsn, mySQLDsn db.MySQLDsn, redisAddr cache.RedisAd
 	appointmentRepository := repository3.NewAppointmentRepo(sqlDB, logger)
 	appointmentService := service3.NewAppointmentService(appointmentRepository, patientService, mainCacheAdapter, mainPublisherAdapter, logger)
 	appointmentHandler := handler3.NewAppointmentHandler(appointmentService, logger)
+	patientSubscriber := subscriber.NewPatientSubscriber(billingService, logger)
 	app := &App{
 		PatientHandler:     patientHandler,
 		BillingHandler:     billingHandler,
 		AppointmentHandler: appointmentHandler,
+		PatientSubscriber:  patientSubscriber,
 	}
 	return app, nil
 }
@@ -94,6 +97,7 @@ type App struct {
 	PatientHandler     *handler.PatientHandler
 	BillingHandler     *handler2.BillingHandler
 	AppointmentHandler *handler3.AppointmentHandler
+	PatientSubscriber  *subscriber.PatientSubscriber
 }
 
 // Provider functions for adapters

@@ -591,6 +591,231 @@ func (r *pgRepo) SaveWithOutbox(ctx context.Context, p *domain.Patient) error {
 
 Event payloads must match the struct definitions in `contracts/events/v1/` — this ensures all modules share the same data format.
 
+### Event Subscription: Reacting to Cross-Module Events
+
+When Module B needs to react to events from Module A (e.g., Billing creating invoice when Patient registers), use a **subscriber**:
+
+**1. Define Subscriber** (`internal/modules/billing/subscriber/patient.go`):
+
+```go
+// PatientSubscriber listens to patient events and creates billing records
+type PatientSubscriber struct {
+    svc  domain.BillingService
+    log  *zap.Logger
+    topic string
+}
+
+func NewPatientSubscriber(svc domain.BillingService, log *zap.Logger) *PatientSubscriber {
+    return &PatientSubscriber{
+        svc:   svc,
+        log:   log,
+        topic: "app.patient.registered.v1",
+    }
+}
+
+func (s *PatientSubscriber) Topic() string { return s.topic }
+
+func (s *PatientSubscriber) HandleEvent(ctx context.Context, payload []byte) error {
+    var evt v1.PatientRegisteredV1
+    if err := json.Unmarshal(payload, &evt); err != nil {
+        s.log.Error("failed to unmarshal patient event", zap.Error(err))
+        return err
+    }
+
+    // Auto-generate welcome invoice
+    _, err := s.svc.GenerateInvoice(ctx, evt.PatientID, 0.0, "Welcome invoice - auto generated")
+    if err != nil {
+        s.log.Error("failed to generate welcome invoice",
+            zap.String("patient_id", evt.PatientID), zap.Error(err))
+        return err
+    }
+
+    s.log.Info("welcome invoice generated", zap.String("patient_id", evt.PatientID))
+    return nil
+}
+```
+
+**2. Wire the Subscriber** (`cmd/api/wire.go`):
+
+```go
+import (
+    billingsubscriber "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/subscriber"
+)
+
+type App struct {
+    PatientHandler     *patienthandler.PatientHandler
+    BillingHandler    *billinghandler.BillingHandler
+    PatientSubscriber *billingsubscriber.PatientSubscriber // Add to App struct
+}
+
+// In wire.Build():
+wire.Build(
+    // ... existing providers ...
+    billingsubscriber.NewPatientSubscriber, // Add subscriber provider
+    wire.Struct(new(App), "*"),
+)
+```
+
+**3. Start Subscriber in main.go**:
+
+```go
+// Consumer/Subscriber - start event subscribers
+if app.PatientSubscriber != nil {
+    logger.Info("starting patient subscriber", zap.String("topic", app.PatientSubscriber.Topic()))
+    go func() {
+        // Wrap to match RabbitMQ handler signature (topic string)
+        handler := func(ctx context.Context, topic string, payload []byte) error {
+            return app.PatientSubscriber.HandleEvent(ctx, payload)
+        }
+        if err := rabbitMQ.Subscribe([]string{app.PatientSubscriber.Topic()}, handler); err != nil {
+            logger.Error("patient subscriber failed", zap.Error(err))
+        }
+    }()
+}
+```
+
+### Complete Pub/Sub Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Handler
+    participant Service
+    participant DB as PostgreSQL<br/>(outbox_events)
+    participant Relay as OutboxRelay<br/>(Worker)
+    participant RabbitMQ
+    participant Subscriber
+    participant BillingSvc as Billing<br/>Service
+
+    Note over Client,RabbitMQ: EVENT PUBLISHING FLOW
+
+    Client->>Handler: POST /patients
+    Handler->>Service: Register()
+    Service->>Service: Validate + build entity
+    Service->>DB: BEGIN TRANSACTION
+    DB->>DB: INSERT patient
+    DB->>DB: INSERT outbox_events<br/>(topic: app.patient.registered.v1)
+    DB-->>Service: COMMIT
+    Note over DB: Atomic - both succeed or rollback
+
+    loop Poll every 100ms
+        Relay->>DB: SELECT * FROM outbox_events<br/>WHERE status = 'pending'
+        DB-->>Relay: unread events
+        Relay->>RabbitMQ: Publish(topic, payload)
+        RabbitMQ-->>Relay: ack
+        Relay->>DB: UPDATE status = 'published'
+    end
+
+    Note over Client,BillingSvc: EVENT SUBSCRIPTION FLOW
+
+    RabbitMQ->>Subscriber: Deliver event<br/>(app.patient.registered.v1)
+    Subscriber->>Subscriber: Unmarshal payload
+    Subscriber->>BillingSvc: GenerateInvoice(patientID, 0)
+    BillingSvc->>DB: BEGIN TRANSACTION
+    DB->>DB: INSERT billing_invoices
+    DB->>DB: INSERT outbox_events<br/>(app.billing.invoice.created.v1)
+    DB-->>BillingSvc: COMMIT
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                        EVENT PUBLISHING FLOW                        │
+├───────────────────────────────────────────────────────────────��─────────┤
+│                                                                         │
+│  ┌──────────┐     ┌──────────────┐     ┌─────────────┐     ┌───────┐ │
+│  │  Client  │────▶│   Handler    │────▶│  Service   │────▶│  DB   │ │
+│  └──────────┘     └──────────────┘     └─────────────┘     └───────┘ │
+│                                                    │               │
+│                                                    ▼               │
+│                                            ┌─────────────────┐         │
+│                                            │ outbox_events   │         │
+│                                            │ + patient     │         │
+│                                            │ (same trans)  │         │
+│                                            └─────────────────┘         │
+│                                                    │               │
+└────────────────────────────────────────────────────┼─────────────────┘
+                                                     │ poll every 100ms
+                                                     ▼
+                                         ┌───────────────────┐
+                                         │  OutboxRelay      │
+                                         │  Worker          │
+                                         └───────────────────┘
+                                                     │
+                                                     │ publish
+                                                     ▼
+                                         ┌───────────────────┐
+                                         │   RabbitMQ       │
+                                         │ topic: app.patient│
+                                         │ .registered.v1  │
+                                         └───────────────────┘
+```
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                        EVENT SUBSCRIPTION FLOW                       │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌───────────────┐     ┌──────────────┐     ┌──────────────────┐      │
+│  │  RabbitMQ    │────▶│ Subscriber   │────▶│ Billing Service │      │
+│  │  queue      │     │ HandleEvent  │     │ GenerateInvoice │      │
+│  │  listens   │     │ (unmarshal) │     │ + outbox        │      │
+│  └───────────────┘     └──────────────┘     └──────────────────┘      │
+│        │                                                         │      │
+│        ▼                                                         ▼      │
+│  ┌───────────────┐                                        ┌──────────────┐│
+│  │  billing_   │                                        │ outbox_    ││
+│  │  invoices  │                                        │ events    ││
+│  └───────────────┘                                        └──────────────┘│
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Event Contracts
+
+Events are defined in `contracts/events/v1/`. All publishers and subscribers must use the same struct:
+
+```go
+// contracts/events/v1/patient.go
+package v1
+
+type PatientRegisteredV1 struct {
+    PatientID string `json:"patient_id"`
+    FullName  string `json:"full_name"`
+    Email     string `json:"email"`
+}
+```
+
+### Topic Naming Convention
+
+Use reverse-DNS notation: `app.module.event_type.version`
+
+| Module | Event | Topic |
+|--------|-------|-------|
+| patient | registered | `app.patient.registered.v1` |
+| patient | updated | `app.patient.updated.v1` |
+| billing | invoice created | `app.billing.invoice.created.v1` |
+| appointment | scheduled | `app.appointment.scheduled.v1` |
+
+### Error Handling in Subscribers
+
+**Critical: Never requeue messages on failure.** This causes infinite loops:
+
+```go
+// ❌ WRONG - causes infinite retry loop
+d.Nack(false, true) // requeue = true
+
+// ✅ CORRECT - drop failed messages
+d.Nack(false, false) // requeue = false
+```
+
+Failed messages are logged and dropped. Fix the code and replay events manually if needed, or implement a dead-letter queue (DLQ) for production.
+
+### Wire Integration Summary
+
+| Component | Where Defined | How Wired |
+|-----------|--------------|----------|
+| Publisher | `domain/ interfaces.go` | Interface binding in `wire.go` |
+| Subscriber | `modules/*/subscriber/` | Wire provider in `wire.go` |
+| Event Contract | `contracts/events/v1/` | Shared, no wiring needed |
+| Outbox Relay | `infrastructure/broker/` | Started in `main.go` |
+
 ---
 
 ## End-to-End Execution Flow: Deep Dive into HTTP Request

@@ -72,8 +72,9 @@ func (r *RabbitMQ) Subscribe(topics []string, handler func(ctx context.Context, 
 		for d := range msgs {
 			ctx := context.Background() // bisa inject trace/request ID middleware
 			if err := handler(ctx, d.RoutingKey, d.Body); err != nil {
-				r.log.Error("handler failed, nacking", zap.String("topic", d.RoutingKey), zap.Error(err))
-				d.Nack(false, true) // requeue
+				r.log.Error("handler failed, dropping message (no requeue)",
+					zap.String("topic", d.RoutingKey), zap.Error(err))
+				d.Nack(false, false) // don't requeue - avoid infinite loop
 			} else {
 				d.Ack(false)
 			}
