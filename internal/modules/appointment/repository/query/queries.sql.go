@@ -12,6 +12,15 @@ import (
 	"time"
 )
 
+const cancelAppointment = `-- name: CancelAppointment :exec
+UPDATE appointments SET status = 'cancelled' WHERE id = ? AND status != 'cancelled'
+`
+
+func (q *Queries) CancelAppointment(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, cancelAppointment, id)
+	return err
+}
+
 const getAppointmentByID = `-- name: GetAppointmentByID :one
 SELECT id, patient_id, doctor_id, scheduled_at, status, created_at 
 FROM appointments 

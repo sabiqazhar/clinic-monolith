@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"go.uber.org/zap"
@@ -28,7 +29,7 @@ func (r *OutboxRelay) Start(ctx context.Context) error {
 	ticker := time.NewTicker(r.interval)
 	defer ticker.Stop()
 
-	r.log.Info("outbox relay started")
+	r.log.Info("outbox relay started", zap.Duration("interval", r.interval), zap.Int("batch_size", 50))
 	for {
 		select {
 		case <-ctx.Done():
@@ -41,12 +42,12 @@ func (r *OutboxRelay) Start(ctx context.Context) error {
 }
 
 func (r *OutboxRelay) processPending(ctx context.Context) {
-	// FOR UPDATE SKIP LOCKED mencegah race condition saat multiple instance
+	start := time.Now()
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, topic, payload FROM outbox_events 
-		WHERE status = 'pending' 
-		ORDER BY created_at 
-		LIMIT 50 
+		SELECT id, topic, payload FROM outbox_events
+		WHERE status = 'pending'
+		ORDER BY created_at
+		LIMIT 50
 		FOR UPDATE SKIP LOCKED
 	`)
 	if err != nil {
@@ -55,20 +56,33 @@ func (r *OutboxRelay) processPending(ctx context.Context) {
 	}
 	defer rows.Close()
 
+	var ids []string
 	for rows.Next() {
 		var id, topic, payload string
 		if err := rows.Scan(&id, &topic, &payload); err != nil {
+			r.log.Warn("scan outbox row failed", zap.Error(err))
 			continue
 		}
+		ids = append(ids, id)
 
 		if err := r.producer.Publish(ctx, topic, []byte(payload)); err != nil {
-			r.log.Error("publish outbox failed", zap.String("id", id), zap.Error(err))
-			// Di prod: increment retry count, pindah ke DLQ jika > max_retries
+			r.log.Error("publish outbox failed",
+				zap.String("id", id),
+				zap.String("topic", topic),
+				zap.Error(err))
 			continue
 		}
 
-		// Mark as processed
 		r.db.ExecContext(ctx, `UPDATE outbox_events SET status = 'processed', processed_at = NOW() WHERE id = $1`, id)
-		r.log.Debug("outbox event published", zap.String("topic", topic))
+		r.log.Info("outbox event published",
+			zap.String("id", id),
+			zap.String("topic", topic),
+			zap.String("payload_size", fmt.Sprintf("%d bytes", len(payload))))
+	}
+
+	if len(ids) > 0 {
+		r.log.Info("outbox batch complete",
+			zap.Int("processed", len(ids)),
+			zap.String("duration", time.Since(start).String()))
 	}
 }

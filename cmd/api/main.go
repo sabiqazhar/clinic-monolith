@@ -87,8 +87,8 @@ func main() {
 	// Compile-Time Dependency Injection (Wire)
 	// Wire akan merakit: Repository → Service → Handler secara otomatis.
 	app, err := InitializeApp(
-		db.PGDsn(cfg.PostgresURL), // PostgreSQL DSN
-		// db.MySQLDsn(cfg.MysqlURL),        // TODO: uncomment when appointment module ready
+		db.PGDsn(cfg.PostgresURL),                // PostgreSQL DSN
+		db.MySQLDsn(cfg.MysqlURL),                // TODO: uncomment when appointment module ready
 		cache.RedisAddr(config.BuildRedisAddr()), // Redis address
 		broker.RabbitURL(cfg.RabbitMQURL),        // RabbitMQ URL
 		logger,                                   // Shared logger
@@ -104,8 +104,16 @@ func main() {
 
 	// Outbox Relay per Database: poll → publish ke RabbitMQ.
 	// Setiap DB punya relay sendiri agar isolasi failure.
-	// Catatan: coreDB (PostgreSQL via pgxpool) tidak bisa langsung dipakai
-	// oleh OutboxRelay yang butuh *sql.DB. Relay MySQL saja yang aktif.
+
+	// PostgreSQL Outbox Relay (Patient & Billing modules)
+	pgSQLDB, err := db.NewPostgresSQLDB(db.PGDsn(cfg.PostgresURL))
+	if err != nil {
+		logger.Fatal("postgres sql db for outbox relay init failed", zap.Error(err))
+	}
+	defer pgSQLDB.Close()
+	go broker.NewOutboxRelay(pgSQLDB, rabbitMQ, logger).Start(ctx)
+
+	// MySQL Outbox Relay (Appointment module)
 	go broker.NewOutboxRelay(apptDB, rabbitMQ, logger).Start(ctx)
 
 	// Consumer/Subscriber bisa di-start di sini jika sudah diimplementasi:
@@ -126,7 +134,7 @@ func main() {
 	// Mount routes per modul (Handler Self-Registration Pattern)
 	// Blueprint: "Handler tahu route-nya sendiri, main.go cuma mount."
 	app.PatientHandler.RegisterRoutes(v1.Group("/patients"))
-	// app.AppointmentHandler.RegisterRoutes(v1.Group("/appointments"))
+	app.AppointmentHandler.RegisterRoutes(v1.Group("/appointments"))
 	app.BillingHandler.RegisterRoutes(v1.Group("/billing"))
 
 	// Health check endpoint (bisa untuk Kubernetes liveness probe)

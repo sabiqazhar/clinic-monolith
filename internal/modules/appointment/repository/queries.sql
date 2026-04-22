@@ -7,6 +7,9 @@ WHERE id = ?;
 INSERT INTO appointments (id, patient_id, doctor_id, scheduled_at, status, created_at) 
 VALUES (?, ?, ?, ?, 'scheduled', NOW());
 
+-- name: CancelAppointment :exec
+UPDATE appointments SET status = 'cancelled' WHERE id = ? AND status != 'cancelled';
+
 -- name: InsertOutboxEvent :exec
 INSERT INTO outbox_events (id, topic, payload, status, created_at) 
 VALUES (?, ?, ?, 'pending', NOW());

@@ -9,6 +9,7 @@ import (
 )
 
 type Querier interface {
+	CancelAppointment(ctx context.Context, id string) error
 	GetAppointmentByID(ctx context.Context, id string) (GetAppointmentByIDRow, error)
 	InsertAppointment(ctx context.Context, arg InsertAppointmentParams) error
 	InsertOutboxEvent(ctx context.Context, arg InsertOutboxEventParams) error

@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	v1 "github.com/sabiqazhar/clinic-monolith/contracts/events/v1"
+	"github.com/sabiqazhar/clinic-monolith/helper"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/billing/domain"
 	patientdomain "github.com/sabiqazhar/clinic-monolith/internal/modules/patient/domain"
 	"go.uber.org/zap"
@@ -88,11 +89,10 @@ func (s *billingService) GenerateInvoice(ctx context.Context, patientID string, 
 	}
 
 	// 🔵 3. ASYNC PUBLISH: Event akan dikirim oleh OutboxRelay
-	payload, _ := json.Marshal(v1.InvoiceV1{
+	payload, _ := json.Marshal(v1.InvoiceCreatedV1{
 		InvoiceID: inv.ID,
 		PatientID: inv.PatientID,
-		Amount:    inv.Amount,
-		CreatedAt: inv.CreatedAt,
+		Amount:    helper.ToPgNumeric(inv.Amount),
 	})
 	s.pub.PublishEventAsync(ctx, "app.billing.invoice.created.v1", payload)
 

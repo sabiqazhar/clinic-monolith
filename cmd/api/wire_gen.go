@@ -11,6 +11,9 @@ import (
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/broker"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/cache"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/db"
+	handler3 "github.com/sabiqazhar/clinic-monolith/internal/modules/appointment/handler"
+	repository3 "github.com/sabiqazhar/clinic-monolith/internal/modules/appointment/repository"
+	service3 "github.com/sabiqazhar/clinic-monolith/internal/modules/appointment/service"
 	handler2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/handler"
 	repository2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/repository"
 	service2 "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/service"
@@ -31,7 +34,7 @@ import (
 
 // InitializeApp is the INJECTOR FUNCTION.
 // All config values are passed as parameters - Wire provides them from injector's args
-func InitializeApp(pgDsn db.PGDsn, redisAddr cache.RedisAddr, rabbitURL broker.RabbitURL, logger *zap.Logger) (*App, error) {
+func InitializeApp(pgDsn db.PGDsn, mySQLDsn db.MySQLDsn, redisAddr cache.RedisAddr, rabbitURL broker.RabbitURL, logger *zap.Logger) (*App, error) {
 	pool, err := db.NewPostgresPool(pgDsn)
 	if err != nil {
 		return nil, err
@@ -52,9 +55,17 @@ func InitializeApp(pgDsn db.PGDsn, redisAddr cache.RedisAddr, rabbitURL broker.R
 	invoiceRepository := repository2.NewBillingRepo(pool, logger)
 	billingService := service2.NewBillingService(invoiceRepository, patientService, mainCacheAdapter, mainPublisherAdapter, logger)
 	billingHandler := handler2.NewBillingHandler(billingService, logger)
+	sqlDB, err := db.NewMySQLDB(mySQLDsn)
+	if err != nil {
+		return nil, err
+	}
+	appointmentRepository := repository3.NewAppointmentRepo(sqlDB, logger)
+	appointmentService := service3.NewAppointmentService(appointmentRepository, patientService, mainCacheAdapter, mainPublisherAdapter, logger)
+	appointmentHandler := handler3.NewAppointmentHandler(appointmentService, logger)
 	app := &App{
-		PatientHandler: patientHandler,
-		BillingHandler: billingHandler,
+		PatientHandler:     patientHandler,
+		BillingHandler:     billingHandler,
+		AppointmentHandler: appointmentHandler,
 	}
 	return app, nil
 }
@@ -80,8 +91,9 @@ func (p *publisherAdapter) PublishEventAsync(ctx context.Context, topic string, 
 // App adalah struct yang menampung semua handler yang sudah dirakit.
 // Wire akan mengisi field-field ini secara otomatis.
 type App struct {
-	PatientHandler *handler.PatientHandler
-	BillingHandler *handler2.BillingHandler
+	PatientHandler     *handler.PatientHandler
+	BillingHandler     *handler2.BillingHandler
+	AppointmentHandler *handler3.AppointmentHandler
 }
 
 // Provider functions for adapters

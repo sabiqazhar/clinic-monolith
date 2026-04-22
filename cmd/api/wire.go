@@ -13,6 +13,9 @@ import (
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/broker"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/cache"
 	"github.com/sabiqazhar/clinic-monolith/internal/infrastructure/db"
+	"github.com/sabiqazhar/clinic-monolith/internal/modules/appointment"
+	appointmentdomain "github.com/sabiqazhar/clinic-monolith/internal/modules/appointment/domain"
+	appointmenthandler "github.com/sabiqazhar/clinic-monolith/internal/modules/appointment/handler"
 	"github.com/sabiqazhar/clinic-monolith/internal/modules/billing"
 	billingdomain "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/domain"
 	billinghandler "github.com/sabiqazhar/clinic-monolith/internal/modules/billing/handler"
@@ -42,15 +45,16 @@ func (p *publisherAdapter) PublishEventAsync(ctx context.Context, topic string, 
 // App adalah struct yang menampung semua handler yang sudah dirakit.
 // Wire akan mengisi field-field ini secara otomatis.
 type App struct {
-	PatientHandler *patienthandler.PatientHandler
-	BillingHandler *billinghandler.BillingHandler
+	PatientHandler     *patienthandler.PatientHandler
+	BillingHandler     *billinghandler.BillingHandler
+	AppointmentHandler *appointmenthandler.AppointmentHandler
 }
 
 // InitializeApp is the INJECTOR FUNCTION.
 // All config values are passed as parameters - Wire provides them from injector's args
 func InitializeApp(
 	pgDsn db.PGDsn,
-	// _ db.MySQLDsn, // TODO: uncomment when appointment module ready
+	_ db.MySQLDsn, // TODO: uncomment when appointment module ready
 	redisAddr cache.RedisAddr,
 	rabbitURL broker.RabbitURL,
 	logger *zap.Logger,
@@ -58,7 +62,7 @@ func InitializeApp(
 	wire.Build(
 		// Base providers
 		db.NewPostgresPool,
-		// db.NewMySQLDB, // TODO: uncomment when appointment module ready
+		db.NewMySQLDB, // TODO: uncomment when appointment module ready
 		cache.NewRedisClient,
 		broker.NewRabbitMQ,
 
@@ -73,10 +77,14 @@ func InitializeApp(
 		// Billing domain interfaces
 		wire.Bind(new(billingdomain.CacheManager), new(*cacheAdapter)),
 		wire.Bind(new(billingdomain.EventPublisher), new(*publisherAdapter)),
+		// Appointment domain interfaces
+		wire.Bind(new(appointmentdomain.CacheManager), new(*cacheAdapter)),
+		wire.Bind(new(appointmentdomain.EventPublisher), new(*publisherAdapter)),
 
 		// Patient module provider set
 		patient.PatientSet,
 		billing.BillingSet,
+		appointment.AppointmentSet,
 
 		// App struct
 		wire.Struct(new(App), "*"),
