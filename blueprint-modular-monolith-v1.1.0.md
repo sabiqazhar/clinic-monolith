@@ -712,59 +712,9 @@ sequenceDiagram
     Subscriber->>Subscriber: Unmarshal payload
     Subscriber->>BillingSvc: GenerateInvoice(patientID, 0)
     BillingSvc->>DB: BEGIN TRANSACTION
-    DB->>DB: INSERT billing_invoices
+DB->>DB: INSERT billing_invoices
     DB->>DB: INSERT outbox_events<br/>(app.billing.invoice.created.v1)
     DB-->>BillingSvc: COMMIT
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                        EVENT PUBLISHING FLOW                        │
-├───────────────────────────────────────────────────────────────��─────────┤
-│                                                                         │
-│  ┌──────────┐     ┌──────────────┐     ┌─────────────┐     ┌───────┐ │
-│  │  Client  │────▶│   Handler    │────▶│  Service   │────▶│  DB   │ │
-│  └──────────┘     └──────────────┘     └─────────────┘     └───────┘ │
-│                                                    │               │
-│                                                    ▼               │
-│                                            ┌─────────────────┐         │
-│                                            │ outbox_events   │         │
-│                                            │ + patient     │         │
-│                                            │ (same trans)  │         │
-│                                            └─────────────────┘         │
-│                                                    │               │
-└────────────────────────────────────────────────────┼─────────────────┘
-                                                     │ poll every 100ms
-                                                     ▼
-                                         ┌───────────────────┐
-                                         │  OutboxRelay      │
-                                         │  Worker          │
-                                         └───────────────────┘
-                                                     │
-                                                     │ publish
-                                                     ▼
-                                         ┌───────────────────┐
-                                         │   RabbitMQ       │
-                                         │ topic: app.patient│
-                                         │ .registered.v1  │
-                                         └───────────────────┘
-```
-
-```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
-│                        EVENT SUBSCRIPTION FLOW                       │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                         │
-│  ┌───────────────┐     ┌──────────────┐     ┌──────────────────┐      │
-│  │  RabbitMQ    │────▶│ Subscriber   │────▶│ Billing Service │      │
-│  │  queue      │     │ HandleEvent  │     │ GenerateInvoice │      │
-│  │  listens   │     │ (unmarshal) │     │ + outbox        │      │
-│  └───────────────┘     └──────────────┘     └──────────────────┘      │
-│        │                                                         │      │
-│        ▼                                                         ▼      │
-│  ┌───────────────┐                                        ┌──────────────┐│
-│  │  billing_   │                                        │ outbox_    ││
-│  │  invoices  │                                        │ events    ││
-│  └───────────────┘                                        └──────────────┘│
-└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Event Contracts
