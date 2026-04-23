@@ -906,3 +906,4 @@ make create-module name=<module_name>
 - Ensure infrastructure is up before running migrations.
 - Ensure migrations are applied before starting app.
 - After any SQL/schema update, run `sqlc generate` to keep repository code in sync.
+- If the module/package in go are not imported or the go.sum and go.mod are not sync, use `go mod tidy`
