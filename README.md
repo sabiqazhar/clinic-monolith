@@ -209,45 +209,7 @@ Handlers exist and support:
 
 ## Development Workflow
 
-Typical local workflow:
-
-1. Start infra:
-
-   ```bash
-   docker-compose up -d
-   ```
-
-2. Apply migrations:
-
-   ```bash
-   make pg-up
-   make my-up
-   ```
-
-3. Regenerate SQL layer when queries/schema change:
-
-   ```bash
-   sqlc generate
-   ```
-
-4. Run app:
-
-   ```bash
-   go run ./cmd/api
-   ```
-
-5. Test endpoints and inspect logs.
-
-When changing DB schema:
-
-- Create migration file(s)
-- Apply migration(s)
-- Update SQL queries if needed
-- Re-run `sqlc generate`
-
----
-
-## How to Create a New Module (Step-by-Step Guid for New Dev)
+> Case: Create New Module
 
 Hey! So you need to add a new feature/module to this project? Don't worry—this guide will walk you through everything step by step. We'll use the example of creating a `doctor` module, but you can replace `doctor` with whatever module name you need.
 
@@ -847,7 +809,7 @@ Before you're done, verify:
 - [ ] Provider set added in `wire.go`
 - [ ] Handler added to `App` struct
 - [ ] Routes mounted in `cmd/api/main.go`
-- [ ] `wire ./cmd/api` generated successfully
+- [ ] `wire gen ./cmd/api/...` generated successfully
 - [ ] App builds and runs without errors
 - [ ] Endpoints tested with curl/Postman
 
