@@ -83,7 +83,7 @@ func InitializeApp(
 		wire.Bind(new(appointmentdomain.CacheManager), new(*cacheAdapter)),
 		wire.Bind(new(appointmentdomain.EventPublisher), new(*publisherAdapter)),
 
-		// Patient module provider set
+		// module provider set
 		patient.PatientSet,
 		billing.BillingSet,
 		appointment.AppointmentSet,
