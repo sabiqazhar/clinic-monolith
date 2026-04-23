@@ -400,7 +400,7 @@ INSERT INTO outbox_events (id, topic, payload, status, created_at)
 VALUES ($1, $2, $3, 'pending', NOW());
 ```
 
-📝 **Query directives:**
+**Query directives:**
 
 - `:one` → returns one row
 - `:many` → returns multiple rows
@@ -424,7 +424,7 @@ This creates:
 - `internal/modules/doctor/repository/query/queries.sql.go` → Implementation
 - `internal/modules/doctor/repository/query/models.go` → Row structs
 
-✅ **Check:** Open the generated files to see what was created. You'll use these in the repository.
+**Check:** Open the generated files to see what was created. You'll use these in the repository.
 
 ---
 
@@ -518,7 +518,7 @@ func (r *pgRepo) SaveWithOutbox(ctx context.Context, d *domain.Doctor) error {
 }
 ```
 
-💡 **Pattern:** This uses transactional outbox—saving data + queuing events in one transaction.
+**Pattern:** This uses transactional outbox—saving data + queuing events in one transaction.
 
 ---
 
@@ -796,7 +796,7 @@ wire gen ./cmd/api/...
 
 This creates/updates `cmd/api/wire_gen.go`.
 
-✅ **Success check:** If you see errors, read them carefully—usually it's a missing import or mismatched interface.
+**Success check:** If you see errors, read them carefully—usually it's a missing import or mismatched interface.
 
 ---
 
@@ -806,10 +806,13 @@ Finally, build and test your module:
 
 ```bash
 # Build
-go build ./cmd/api
+go build -o app ./cmd/api
 
-# Run
-go run ./cmd/api
+# Run (no need build)
+go run ./cmd/api/...
+
+# Run (if already build)
+./app
 ```
 
 Test your endpoints:
@@ -841,7 +844,7 @@ Before you're done, verify:
 - [ ] `provider.go` configured
 - [ ] Module imported in `cmd/api/wire.go`
 - [ ] Interface bindings added in `wire.go`
-- [ ] Provider set added in `wire.Build`
+- [ ] Provider set added in `wire.go`
 - [ ] Handler added to `App` struct
 - [ ] Routes mounted in `cmd/api/main.go`
 - [ ] `wire ./cmd/api` generated successfully
